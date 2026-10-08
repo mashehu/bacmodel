@@ -18,9 +18,10 @@ workflow BACMODEL {
 
     take:
     ch_genomes // channel: [ val(meta), path(fasta) ] - samplesheet read in from --input, already formatted by PIPELINE_INITIALISATION
+    outdir     // string: output directory
     main:
 
-    ch_versions = channel.empty()
+    def ch_versions = channel.empty()
 
     //
     // Snapshot the params BACMODEL_ANALYSIS and its subworkflows need, so
@@ -32,7 +33,7 @@ workflow BACMODEL {
         // DB cache dirs default under this run's outdir (not the pipeline's own assets/
         // dir) when the user hasn't pointed at a pre-downloaded copy - see conf/modules.config,
         // which mirrors this same fallback for where the download gets published.
-        baktadb                   : params.baktadb ?: "${params.outdir}/databases/bakta",
+        bakta_db                  : params.bakta_db ?: "${params.outdir}/databases/bakta",
         skip_macsyfinder          : params.skip_macsyfinder,
         macsyfinder_models        : params.macsyfinder_models,
         macsyfinder_db            : params.macsyfinder_db ?: "${params.outdir}/databases/macsyfinder",
@@ -58,7 +59,7 @@ workflow BACMODEL {
     //
     // Collate and save software versions
     //
-    def topic_versions = Channel.topic("versions")
+    def topic_versions = channel.topic("versions")
         .distinct()
         .branch { entry ->
             versions_file: entry instanceof Path
@@ -78,16 +79,14 @@ workflow BACMODEL {
             "${process}:\n${tool_versions.join('\n')}"
         }
 
-    softwareVersionsToYAML(ch_versions.mix(topic_versions.versions_file))
+    def ch_collated_versions = softwareVersionsToYAML(ch_versions.mix(topic_versions.versions_file))
         .mix(topic_versions_string)
         .collectFile(
-            storeDir: "${params.outdir}/pipeline_info",
+            storeDir: "${outdir}/pipeline_info",
             name: 'nf_core_'  +  'bacmodel_software_'  + 'versions.yml',
             sort: true,
             newLine: true
-        ).set { ch_collated_versions }
-
-
+        )
     emit:
     versions       = ch_collated_versions                 // channel: [ path(versions.yml) ]
 }
